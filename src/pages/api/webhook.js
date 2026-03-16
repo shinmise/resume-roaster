@@ -1,14 +1,22 @@
 import Stripe from 'stripe'
-import { buffer } from 'micro'
 
 export const config = { api: { bodyParser: false } }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 
+async function getRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = []
+    req.on('data', chunk => chunks.push(chunk))
+    req.on('end', () => resolve(Buffer.concat(chunks)))
+    req.on('error', reject)
+  })
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const buf = await buffer(req)
+  const buf = await getRawBody(req)
   const sig = req.headers['stripe-signature']
 
   let event
@@ -19,13 +27,11 @@ export default async function handler(req, res) {
   }
 
   if (event.type === 'checkout.session.completed') {
-    // TODO: Mark user as paid in your database
     const session = event.data.object
     console.log('✅ New subscriber:', session.customer_email)
   }
 
   if (event.type === 'customer.subscription.deleted') {
-    // TODO: Remove paid access
     console.log('❌ Subscription cancelled')
   }
 
